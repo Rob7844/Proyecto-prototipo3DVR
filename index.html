@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Simulador 3D / VR - Tarea Académica N° 5</title>
+
+
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js">
+
+<style>
+:root{
+  --bg:#0b1220; --panel:#111a2c; --panel2:#0d1626;
+  --line:#263653; --line2:#1f2d47;
+  --txt:#e8eef7; --muted:#9fb0c8; --accent:#8fb8ff;
+  --blue:#2d7ff9; --violet:#7a4df0; --ghost:#22314d;
+  --radius:16px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--txt)}
+canvas{display:block;width:100vw;height:100vh}
+
+/* --- Menú --- */
+#menu{position:fixed;inset:0;background:rgba(8,14,26,.72);
+  display:flex;align-items:center;justify-content:center;z-index:10;
+  overflow:auto;padding:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:24px 28px;max-width:760px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.card h1{margin:0 0 4px;font-size:22px}
+.card .sub{color:var(--muted);font-size:13px;margin-bottom:16px}
+
+/* --- Botones --- */
+.btns{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
+button{font:inherit;cursor:pointer;border:0;border-radius:10px;
+  padding:11px 16px;font-weight:600;background:var(--blue);color:#fff}
+button.alt{background:var(--violet)}
+button.ghost{background:var(--ghost);color:#d5e1f5}
+button:hover{filter:brightness(1.12)}
+button:disabled{opacity:.5;cursor:not-allowed}
+
+/* --- Layout de menú --- */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px}
+@media(max-width:640px){.grid{grid-template-columns:1fr}}
+.box{background:var(--panel2);border:1px solid var(--line2);border-radius:12px;
+  padding:12px 14px;font-size:13px;line-height:1.55}
+.box h3{margin:0 0 6px;font-size:13px;color:var(--accent);
+  text-transform:uppercase;letter-spacing:.06em}
+
+kbd{background:var(--ghost);border:1px solid #33466a;border-bottom-width:2px;
+  border-radius:5px;padding:0 6px;font-size:12px;font-family:ui-monospace,Menlo,monospace}
+
+label.row{display:flex;align-items:center;gap:10px;margin:6px 0;font-size:13px}
+label.row input[type=range]{flex:1}
+
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+td{padding:3px 6px;border-bottom:1px solid var(--line2);vertical-align:top}
+td:first-child{color:var(--accent);white-space:nowrap}
+
+/* --- HUD / overlays --- */
+#hud{position:fixed;left:12px;top:12px;z-index:5;background:rgba(8,14,26,.62);
+  padding:8px 12px;border-radius:10px;
+  font:12.5px/1.5 ui-monospace,Menlo,Consolas,monospace;
+  pointer-events:none;display:none}
+#help{position:fixed;left:12px;bottom:12px;z-index:5;background:rgba(8,14,26,.55);
+  padding:8px 12px;border-radius:10px;font-size:12px;line-height:1.55;
+  pointer-events:none;display:none;max-width:360px}
+#cross{position:fixed;left:50%;top:50%;width:14px;height:14px;
+  margin:-7px 0 0 -7px;z-index:5;pointer-events:none;display:none}
+#cross:before,#cross:after{content:"";position:absolute;
+  background:rgba(255,255,255,.9);box-shadow:0 0 2px #000}
+#cross:before{left:6px;top:0;width:2px;height:14px}
+#cross:after{top:6px;left:0;height:2px;width:14px}
+#blink{position:fixed;inset:0;background:#000;opacity:0;
+  transition:opacity .11s;pointer-events:none;z-index:6}
+#toast{position:fixed;left:50%;top:18px;transform:translateX(-50%);
+  background:rgba(20,30,50,.92);padding:8px 16px;border-radius:999px;
+  font-size:13px;z-index:7;opacity:0;transition:opacity .25s;pointer-events:none}
+
+/* Asistente OpenAI */
+#aiToggle{position:fixed;right:20px;bottom:20px;z-index:20;border-radius:999px;box-shadow:0 8px 28px #0008}
+#aiPanel{position:fixed;right:20px;bottom:82px;width:min(370px,calc(100vw - 28px));height:min(500px,calc(100vh - 110px));z-index:20;display:none;flex-direction:column;background:#111a2c;border:1px solid #33466a;border-radius:16px;box-shadow:0 18px 55px #0008;overflow:hidden}
+#aiPanel.open{display:flex}.aiHead{padding:13px 15px;background:#17243b;display:flex;align-items:center;justify-content:space-between}
+.aiHead strong{font-size:14px}.aiHead small{display:block;color:#9fb0c8;font-size:11px;margin-top:2px}
+#aiClose{padding:5px 10px;background:#263653}#aiMessages{padding:13px;flex:1;overflow:auto;display:flex;flex-direction:column;gap:9px}
+.aiMsg{max-width:90%;padding:9px 11px;border-radius:12px;font-size:13px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+.aiMsg.bot{background:#1b2b45;align-self:flex-start}.aiMsg.user{background:#245db4;align-self:flex-end}
+#aiForm{display:flex;gap:8px;padding:10px;border-top:1px solid #263653}
+#aiInput{min-width:0;flex:1;border:1px solid #33466a;border-radius:9px;background:#0d1626;color:#e8eef7;padding:10px;font:inherit;font-size:13px}
+#aiSend{padding:9px 13px}#aiStatus{padding:0 12px 8px;color:#9fb0c8;font-size:11px}
+
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="cross"></div>
+<div id="blink"></div>
+<div id="toast"></div>
+<div id="hud"><div id="hudA"></div><div id="hudB"></div></div>
+<div id="help"></div>
+
+
+<button id="aiToggle" type="button">✨ Asistente IA</button>
+<section id="aiPanel" aria-label="Asistente de inteligencia artificial">
+<header class="aiHead"><div><strong>Asistente del simulador</strong><small>Conectado a OpenAI</small></div><button id="aiClose" type="button">✕</button></header>
+<div id="aiMessages"><div class="aiMsg bot">¡Hola! Soy el asistente del simulador 3D/VR. Puedo explicarte los controles, el recorrido FPS, el modo VR y los componentes del proyecto.</div></div>
+<div id="aiStatus">Configura OPENAI_API_KEY en el servidor para activar las respuestas.</div>
+<form id="aiForm"><input id="aiInput" maxlength="1500" placeholder="Escribe tu consulta..." autocomplete="off" required><button id="aiSend" type="submit">Enviar</button></form>
+</section>
+
+<div id="menu">
+  <div class="card">
+    <h1>Simulador 3D / VR</h1>
+    <div class="sub">Tarea Académica N° 5 · Escenario urbano con recorrido FPS y simulador de Realidad Virtual</div>
+
+    <div class="btns">
+      <button id="btnFps">▶ Recorrido FPS (Parte 1)</button>
+      <button id="btnVr" class="alt">▶ Simulador VR (Parte 2)</button>
+      <button id="btnXr" class="alt" style="display:none">🥽 Entrar con visor VR (WebXR)</button>
+      <button id="btnReport" class="ghost">⬇ Descargar reporte (.txt)</button>
+    </div>
+
+    <div class="grid">
+      <div class="box">
+        <h3>Controles</h3>
+        <div><kbd>W A S D</kbd> mover · <kbd>Mouse</kbd> mirar · <kbd>Shift</kbd> correr</div>
+        <div><kbd>Espacio</kbd> saltar · <kbd>Clic izq.</kbd> interactuar</div>
+        <div><b>Simulador VR:</b> <kbd>Clic der.</kbd> o <kbd>T</kbd> teletransporte · <kbd>Q</kbd>/<kbd>E</kbd> giro por pasos</div>
+        <div><kbd>1</kbd> FPS · <kbd>2</kbd> VR · <kbd>V</kbd> estéreo · <kbd>R</kbd> reiniciar · <kbd>P</kbd> captura · <kbd>Esc</kbd> pausa</div>
+      </div>
+      <div class="box">
+        <h3>Ajustes</h3>
+        <label class="row">Sensibilidad <input id="sens" type="range" min="0.3" max="3" step="0.1" value="1"></label>
+        <label class="row">Velocidad <input id="spd" type="range" min="0.5" max="2" step="0.1" value="1"></label>
+        <label class="row"><input id="shadows" type="checkbox" checked> Sombras</label>
+        <label class="row"><input id="stereo" type="checkbox" checked> Vista estéreo en VR</label>
+      </div>
+    </div>
+
+    <div class="box" style="margin-top:14px">
+      <h3>Equivalencia con el proyecto Unity</h3>
+      <table>
+        <tr><td>Terrain + Terrain Layers</td><td>Terreno con colinas, lagos y capas de pasto, tierra, roca, arena y caminos</td></tr>
+        <tr><td>Materiales URP Lit</td><td>Color base, Metallic y Smoothness distintos por objeto</td></tr>
+        <tr><td>Duplicar objetos (Ctrl+D)</td><td>InstancedMesh para casas, autos, árboles y postes</td></tr>
+        <tr><td>Character Controller</td><td>Gravedad, velocidad, sensibilidad del mouse y colisiones</td></tr>
+        <tr><td>XR Origin</td><td>Rig con cámara y dos controladores virtuales</td></tr>
+        <tr><td>Teleportation Area</td><td>Arco parabólico + marcador, con parpadeo anti-mareo</td></tr>
+        <tr><td>XR Device Simulator</td><td>Teclado + mouse + mandos simulados, vista estéreo</td></tr>
+        <tr><td>OpenXR</td><td>WebXR: botón para entrar con visor compatible</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
